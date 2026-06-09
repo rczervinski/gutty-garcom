@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ClipboardList, ListOrdered, GitMerge, LogOut, UtensilsCrossed } from 'lucide-react'
+import { ClipboardList, ListOrdered, GitMerge, LogOut, UserRound } from 'lucide-react'
 import { apiGet, apiPost } from '@/lib/client-api'
 
 export default function MenuPage() {
@@ -31,17 +31,22 @@ export default function MenuPage() {
 
   return (
     <main className="min-h-screen">
-      <header className="flex items-center gap-3 bg-slate-900 px-5 py-5 text-white">
-        <div className="grid h-11 w-11 place-items-center rounded-xl bg-white/10">
-          <UtensilsCrossed size={22} />
+      <header className="bg-stone-900 px-5 pb-5 pt-6 text-white">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="font-display text-3xl font-extrabold leading-none tracking-tighter">
+              <span className="gutty-shine-dark">GUTTY</span>
+            </h1>
+            <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.35em] text-primary-300">Pedidos</p>
+          </div>
+          <button onClick={sair} className="grid h-10 w-10 place-items-center rounded-full text-stone-400 hover:bg-white/10" aria-label="Sair">
+            <LogOut size={20} />
+          </button>
         </div>
-        <div className="flex-1">
-          <p className="text-xs text-slate-300">Garçom</p>
-          <p className="text-lg font-semibold leading-tight">{nome || '...'}</p>
+        <div className="mt-4 flex items-center gap-2 text-sm text-stone-300">
+          <UserRound size={16} className="text-primary-400" />
+          <span className="font-medium text-white">{nome || '...'}</span>
         </div>
-        <button onClick={sair} className="grid h-10 w-10 place-items-center rounded-full text-slate-300 hover:bg-white/10" aria-label="Sair">
-          <LogOut size={20} />
-        </button>
       </header>
 
       <div className="space-y-3 p-4">

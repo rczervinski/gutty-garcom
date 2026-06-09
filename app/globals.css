@@ -28,3 +28,59 @@ body {
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* ============================================
+   LOGO SHINE — feixe de luz varre o texto
+   (mesma técnica do caixa: gradiente 300% de largura
+   clipado nas letras via background-clip: text)
+   ============================================ */
+@keyframes logoShine {
+  0%, 20%   { background-position: 0% center; }
+  65%, 100% { background-position: 100% center; }
+}
+
+/* Versão LARANJA do Gutty Pedidos */
+.gutty-shine {
+  display: inline-block;
+  background: linear-gradient(
+    90deg,
+    #c2410c 0%,
+    #ea580c 15%,
+    #ea580c 38%,
+    #fdba74 44%,
+    #ffedd5 50%,
+    #fdba74 56%,
+    #ea580c 62%,
+    #ea580c 85%,
+    #c2410c 100%
+  );
+  background-size: 300% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: logoShine 3s ease-in-out infinite;
+}
+
+/* Variante clara para fundos escuros (header) */
+.gutty-shine-dark {
+  display: inline-block;
+  background: linear-gradient(
+    90deg,
+    #fb923c 0%,
+    #fdba74 15%,
+    #fdba74 38%,
+    #ffedd5 44%,
+    #fff7ed 50%,
+    #ffedd5 56%,
+    #fdba74 62%,
+    #fdba74 85%,
+    #fb923c 100%
+  );
+  background-size: 300% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: logoShine 3s ease-in-out infinite;
+}
