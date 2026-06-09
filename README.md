@@ -7,14 +7,14 @@ Microserviço web para **anotação de pedidos** (sem pagamento). Porta o app An
 ## Stack
 - Next.js 15 (App Router) + TypeScript + Tailwind
 - Postgres via `pg` (sem ORM), multi-tenant (mesmo banco master do caixa)
-- Auth em 2 camadas: **empresa** (cookie `AUTH_TOKEN`, compartilhado com o caixa) + **vendedor** (cookie `GARCOM_VENDEDOR`)
+- Auth em 2 camadas: **empresa** (cookie `GARCOM_AUTH`, sessão própria do garçom) + **vendedor** (cookie `GARCOM_VENDEDOR`)
 
 ## Como funciona a sessão
-1. `/login` → login da **empresa** (`clientes_web`, mesmo do caixa). Emite `AUTH_TOKEN`.
+1. `/login` → login da **empresa** (`clientes_web`, mesmo do caixa). Emite `GARCOM_AUTH`.
 2. `/garcom/login` → login do **vendedor** por **código + senha** (`vendedores`). Emite `GARCOM_VENDEDOR`.
 3. `/garcom` → menu: Anotar pedido · Comandas abertas · Unir comandas.
 
-O `middleware.ts` exige `AUTH_TOKEN` em tudo (menos `/login` e auth APIs) e redireciona páginas `/garcom/*` para `/garcom/login` quando falta o cookie do vendedor. As rotas `/api/garcom/*` validam o vendedor via `withGarcom`.
+O `middleware.ts` exige `GARCOM_AUTH` em tudo (menos `/login` e auth APIs) e redireciona páginas `/garcom/*` para `/garcom/login` quando falta o cookie do vendedor. As rotas `/api/garcom/*` validam o vendedor via `withGarcom`.
 
 ## Endpoints
 | Método | Rota | Função |

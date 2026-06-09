@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Loader2, Plus, Minus, Search } from 'lucide-react'
 import AppHeader from '@/components/AppHeader'
 import CartFab from '@/components/CartFab'
+import TargetBanner from '@/components/TargetBanner'
 import { apiGet, brl } from '@/lib/client-api'
 import { addItem, setQuantity, getCart, CART_EVENT } from '@/lib/cart'
 
@@ -61,11 +62,13 @@ export default function ProdutosPage() {
       return
     }
     addItem({ codigoGtin: p.codigoGtin, descricao: nome(p), precoVenda: p.precoVenda }, 1)
+    toast.success(`${nome(p)} adicionado`)
   }
 
   return (
     <main className="min-h-screen pb-28">
       <AppHeader title={categoria} back="/garcom/categorias" />
+      <TargetBanner />
 
       <div className="p-3">
         <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3">

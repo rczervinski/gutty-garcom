@@ -1,14 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Minus, Trash2, Loader2, Hash, Send } from 'lucide-react'
+import { Plus, Minus, Trash2, Loader2, Hash, Send, ListOrdered, PlusCircle, CheckCircle2 } from 'lucide-react'
 import AppHeader from '@/components/AppHeader'
+import ComandaPicker, { ComandaAberta } from '@/components/ComandaPicker'
 import { apiGet, apiPost, brl } from '@/lib/client-api'
 import { getCart, setQuantity, removeItem, clearCart, cartTotal, CART_EVENT, CartItem } from '@/lib/cart'
-
-type ComandaAberta = { comanda: number; nome: string; descricao: string }
+import { getTargetComanda, clearTargetComanda } from '@/lib/target-comanda'
 
 export default function CheckoutPage() {
   const router = useRouter()
@@ -18,6 +18,7 @@ export default function CheckoutPage() {
   const [nome, setNome] = useState('')
   const [obs, setObs] = useState('')
   const [abertas, setAbertas] = useState<ComandaAberta[]>([])
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [enviando, setEnviando] = useState(false)
 
   useEffect(() => {
@@ -34,19 +35,33 @@ export default function CheckoutPage() {
     apiGet('/api/garcom/comandas')
       .then((j) => setAbertas(j.data || []))
       .catch(() => {})
+    // Pré-preenche se veio de "adicionar itens" numa comanda aberta.
+    const t = getTargetComanda()
+    if (t) {
+      setComanda(String(t.comanda))
+      setNome(t.nome || '')
+      clearTargetComanda()
+    }
   }, [])
 
-  // Autocomplete: digitar a comanda preenche o nome (se existir aberta).
+  // ---- Autocomplete bidirecional (espelha o CheckoutActivity do Cielo) ----
   function onComanda(v: string) {
     const num = v.replace(/\D/g, '')
     setComanda(num)
     const found = abertas.find((a) => String(a.comanda) === num)
-    if (found && found.nome) setNome(found.nome)
+    if (found) setNome(found.nome || '')
+  }
+
+  function onNome(v: string) {
+    setNome(v)
+    const found = abertas.find((a) => (a.nome || '').toLowerCase() === v.trim().toLowerCase())
+    if (found) setComanda(String(found.comanda))
   }
 
   function escolher(a: ComandaAberta) {
     setComanda(String(a.comanda))
     setNome(a.nome || '')
+    setPickerOpen(false)
   }
 
   async function novaComanda() {
@@ -60,26 +75,36 @@ export default function CheckoutPage() {
     }
   }
 
+  function limparCarrinho() {
+    if (items.length === 0) return
+    clearCart()
+    toast.success('Carrinho limpo')
+  }
+
+  // ---- Status: comanda nova vs existente ----
+  const numComanda = parseInt(comanda) || 0
+  const existente = useMemo(() => abertas.find((a) => a.comanda === numComanda) || null, [abertas, numComanda])
+
   async function enviar() {
     if (items.length === 0) return toast.error('Carrinho vazio')
     if (!comanda && !nome.trim()) return toast.error('Informe a comanda ou o nome')
 
     setEnviando(true)
     try {
-      let numComanda = parseInt(comanda)
-      if (!numComanda) {
+      let num = parseInt(comanda)
+      if (!num) {
         const j = await apiGet('/api/garcom/proxima-comanda')
-        numComanda = j.data
+        num = j.data
       }
       await apiPost('/api/garcom/comandas', {
-        comanda: numComanda,
-        mesa: numComanda,
+        comanda: num,
+        mesa: num,
         nome: nome.trim(),
         obs: obs.trim(),
         items: items.map((i) => ({ codigo_gtin: i.codigoGtin, valor: i.precoVenda, qtde: i.quantidade })),
       })
       clearCart()
-      toast.success(`Pedido enviado para a comanda ${numComanda}`)
+      toast.success(existente ? `Itens adicionados à comanda ${num}` : `Pedido enviado para a comanda ${num}`)
       router.replace('/garcom')
     } catch (e: any) {
       toast.error(e?.message || 'Erro ao enviar pedido')
@@ -90,7 +115,17 @@ export default function CheckoutPage() {
 
   return (
     <main className="min-h-screen pb-40">
-      <AppHeader title="Conferir pedido" back />
+      <AppHeader
+        title="Conferir pedido"
+        back
+        right={
+          items.length > 0 ? (
+            <button onClick={limparCarrinho} className="grid h-9 w-9 place-items-center rounded-full text-rose-500 hover:bg-rose-50" aria-label="Limpar carrinho">
+              <Trash2 size={18} />
+            </button>
+          ) : undefined
+        }
+      />
 
       {items.length === 0 ? (
         <p className="px-4 py-16 text-center text-slate-400">Carrinho vazio</p>
@@ -122,30 +157,57 @@ export default function CheckoutPage() {
       )}
 
       <div className="space-y-3 p-4">
-        <div className="flex items-end gap-2">
-          <div className="flex-1">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Comanda / Mesa</label>
-            <input
-              value={comanda}
-              onChange={(e) => onComanda(e.target.value)}
-              inputMode="numeric"
-              placeholder="Número"
-              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
-            />
-          </div>
-          <button onClick={novaComanda} className="flex items-center gap-1 rounded-xl bg-slate-900 px-3 py-3 text-sm font-medium text-white active:scale-95">
-            <Hash size={16} /> Nova
+        {/* Botões de seleção de comanda */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setPickerOpen(true)}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white py-3 text-sm font-medium text-slate-700 active:scale-95"
+          >
+            <ListOrdered size={18} /> Comanda aberta {abertas.length > 0 ? `(${abertas.length})` : ''}
           </button>
+          <button
+            onClick={novaComanda}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-sm font-medium text-white active:scale-95"
+          >
+            <PlusCircle size={18} /> Nova comanda
+          </button>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Comanda / Mesa</label>
+          <input
+            value={comanda}
+            onChange={(e) => onComanda(e.target.value)}
+            inputMode="numeric"
+            list="comandas-abertas"
+            placeholder="Número da comanda"
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+          />
+          <datalist id="comandas-abertas">
+            {abertas.map((a) => (
+              <option key={a.comanda} value={a.comanda}>
+                {a.nome || `Comanda ${a.comanda}`}
+              </option>
+            ))}
+          </datalist>
         </div>
 
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Cliente (opcional)</label>
           <input
             value={nome}
-            onChange={(e) => setNome(e.target.value)}
+            onChange={(e) => onNome(e.target.value)}
+            list="clientes-abertos"
             placeholder="Nome do cliente"
             className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
           />
+          <datalist id="clientes-abertos">
+            {abertas.filter((a) => a.nome).map((a) => (
+              <option key={`${a.comanda}-${a.nome}`} value={a.nome}>
+                Comanda {a.comanda}
+              </option>
+            ))}
+          </datalist>
         </div>
 
         <div>
@@ -158,21 +220,22 @@ export default function CheckoutPage() {
           />
         </div>
 
-        {abertas.length > 0 && (
-          <div>
-            <p className="mb-1 text-sm font-medium text-slate-700">Comandas abertas</p>
-            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-              {abertas.map((a) => (
-                <button
-                  key={`${a.comanda}-${a.nome}`}
-                  onClick={() => escolher(a)}
-                  className="whitespace-nowrap rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 active:scale-95"
-                >
-                  {a.descricao}
-                </button>
-              ))}
+        {/* Badge: nova vs existente */}
+        {numComanda > 0 && (
+          existente ? (
+            <div className="flex items-center gap-2 rounded-xl bg-primary-50 px-4 py-3 text-sm text-primary-800">
+              <CheckCircle2 size={18} />
+              <span>
+                Adicionando à comanda <b>{numComanda}</b>
+                {existente.nome ? <> · {existente.nome}</> : null} · já tem {existente.totalItens} {existente.totalItens === 1 ? 'item' : 'itens'}
+              </span>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              <PlusCircle size={18} />
+              <span>Nova comanda <b>{numComanda}</b></span>
+            </div>
+          )
         )}
       </div>
 
@@ -184,11 +247,13 @@ export default function CheckoutPage() {
         >
           <span className="flex items-center gap-2">
             {enviando ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
-            Enviar pedido
+            {existente ? 'Adicionar à comanda' : 'Enviar pedido'}
           </span>
           <span className="font-bold">{brl(total)}</span>
         </button>
       </div>
+
+      <ComandaPicker open={pickerOpen} abertas={abertas} onPick={escolher} onClose={() => setPickerOpen(false)} />
     </main>
   )
 }

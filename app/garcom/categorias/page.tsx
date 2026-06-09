@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Loader2, ChevronRight, Search } from 'lucide-react'
 import AppHeader from '@/components/AppHeader'
 import CartFab from '@/components/CartFab'
+import TargetBanner from '@/components/TargetBanner'
 import { apiGet } from '@/lib/client-api'
 
 export default function CategoriasPage() {
@@ -26,6 +27,7 @@ export default function CategoriasPage() {
   return (
     <main className="min-h-screen pb-28">
       <AppHeader title="Categorias" back="/garcom" />
+      <TargetBanner />
 
       <div className="p-3">
         <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3">

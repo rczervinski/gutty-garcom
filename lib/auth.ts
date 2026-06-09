@@ -2,7 +2,11 @@ import { SignJWT, jwtVerify } from 'jose'
 import { NextRequest, NextResponse } from 'next/server'
 import { getTenantById, TenantRecord } from './tenants'
 
-export const COOKIE_NAME = 'AUTH_TOKEN'
+// Nome PRÓPRIO do cookie de empresa do garçom. NÃO reutiliza 'AUTH_TOKEN' do
+// caixa de propósito: em dev os dois apps compartilham o host `localhost`
+// (cookies ignoram a porta), então um nome igual faria o garçom "herdar" a
+// sessão de empresa do caixa e pular o login. Nomes distintos = sessões isoladas.
+export const COOKIE_NAME = 'GARCOM_AUTH'
 
 // AUTH_JWT_SECRET DEVE ser definido via env em produção (compartilhado com o caixa).
 const JWT_SECRET = process.env.AUTH_JWT_SECRET
