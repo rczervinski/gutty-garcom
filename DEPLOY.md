@@ -7,12 +7,12 @@ com PM2 na porta **3002** e nginx servindo o subdomínio **garcom.gutty.app.br**
 
 ## 0) Subir o código pra um repositório remoto (na sua máquina)
 
-O repo é local-only. Crie um repositório **privado** no GitHub (ex.: `gutty-garcom`) e:
+✅ **FEITO** — o código está em `https://github.com/rczervinski/gutty-garcom`
+(branch `main`, remote via HTTPS). Para atualizações futuras, da sua máquina:
 
 ```bash
 cd C:/Users/Pichau/Documents/gutty/garcom
-git remote add origin git@github.com:SEU_USUARIO/gutty-garcom.git
-git push -u origin master
+git push
 ```
 
 > **Alternativa sem GitHub (rsync direto):** pule o git e envie os arquivos da
@@ -31,9 +31,15 @@ ssh ubuntu@3.215.76.152          # mesma chave/usuário que você usa pro caixa
 
 cd /var/www
 sudo mkdir -p garcom-gutty && sudo chown $USER:$USER garcom-gutty
-git clone git@github.com:SEU_USUARIO/gutty-garcom.git garcom-gutty
+git clone https://github.com/rczervinski/gutty-garcom.git garcom-gutty
 cd garcom-gutty
 ```
+
+> **Repo privado?** O clone via HTTPS vai pedir usuário + senha — a "senha" é um
+> **Personal Access Token** (GitHub → Settings → Developer settings →
+> Personal access tokens → Fine-grained → repo `gutty-garcom`, permissão
+> *Contents: Read*). Cole o token no prompt de senha. Para o `git pull` não
+> pedir de novo: `git config credential.helper store` (guarda na VPS).
 
 ## 2) Criar o .env.local REAL
 
