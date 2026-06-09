@@ -8,6 +8,7 @@ export type CartItem = {
   descricao: string
   precoVenda: number
   quantidade: number
+  obs?: string // observação POR ITEM (ex.: "sem cebola")
 }
 
 const KEY = 'garcom_cart'
@@ -55,6 +56,15 @@ export function setQuantity(codigoGtin: string, quantidade: number) {
     if (it) it.quantidade = quantidade
   }
   write(items)
+}
+
+export function setObs(codigoGtin: string, obs: string) {
+  const items = read()
+  const it = items.find((i) => i.codigoGtin === codigoGtin)
+  if (it) {
+    it.obs = obs
+    write(items)
+  }
 }
 
 export function removeItem(codigoGtin: string) {

@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 
 /**
  * GET  /api/garcom/comandas            — lista comandas abertas (status=0) agrupadas
- * GET  /api/garcom/comandas?numero=X   — itens da comanda X
+ * GET  /api/garcom/comandas?numero=X   — itens da comanda X (com obs por item)
  * POST /api/garcom/comandas            — cria/append pedido (lote) numa comanda
  * PUT  /api/garcom/comandas            — substitui todos os itens em aberto de uma comanda
  */
@@ -39,15 +39,17 @@ export const GET = withGarcom(async (req: NextRequest) => {
     return NextResponse.json({ success: true, data })
   }
 
+  // Detalhe: subquery para o nome do produto (evita duplicação se houver GTIN
+  // repetido em `produtos` — um JOIN multiplicaria as linhas do pedido).
   const r = await query(
     `SELECT
         pt.codigo, pt.comanda, pt.mesa, pt.codigo_gtin,
         pt.valor, pt.qtde, pt.total, pt.obs, pt.nome, pt.data, pt.hora, pt.item,
-        COALESCE(p.descricao, pt.codigo_gtin) AS descricao,
-        COALESCE(p_ib.unidade, 'UN')          AS unidade
+        COALESCE(
+          (SELECT descricao FROM produtos WHERE codigo_gtin = pt.codigo_gtin LIMIT 1),
+          pt.codigo_gtin
+        ) AS descricao
      FROM pedidos_terminal pt
-     LEFT JOIN produtos    p    ON p.codigo_gtin       = pt.codigo_gtin
-     LEFT JOIN produtos_ib p_ib ON p_ib.codigo_interno = p.codigo_interno
      WHERE pt.comanda = $1 AND pt.status = 0
      ORDER BY pt.item ASC, pt.codigo ASC`,
     [numero]
@@ -58,7 +60,6 @@ export const GET = withGarcom(async (req: NextRequest) => {
     comanda: Number(row.comanda),
     codigoGtin: row.codigo_gtin,
     descricao: row.descricao,
-    unidade: row.unidade,
     valor: Number(row.valor) || 0,
     qtde: Number(row.qtde) || 0,
     total: Number(row.total) || 0,
@@ -78,7 +79,7 @@ export const POST = withGarcom(async (req: NextRequest, { vendedor }) => {
   const mesa = parseInt(body?.mesa) || comanda
   const nomeRaw = typeof body?.nome === 'string' ? body.nome.trim() : ''
   const nome = nomeRaw ? nomeRaw.toUpperCase() : null
-  const obs = typeof body?.obs === 'string' ? body.obs.trim().slice(0, 200) : ''
+  const obsBatch = typeof body?.obs === 'string' ? body.obs.trim().slice(0, 200) : ''
   const items: any[] = Array.isArray(body?.items) ? body.items : []
 
   if (!comanda || items.length === 0) {
@@ -103,13 +104,15 @@ export const POST = withGarcom(async (req: NextRequest, { vendedor }) => {
         const valor = Number(it?.valor ?? it?.precoVenda) || 0
         const qtde = Number(it?.qtde ?? it?.quantidade) || 0
         if (!codigoGtin || valor <= 0 || qtde <= 0) continue
+        // obs POR ITEM; cai pro obs geral do lote se o item não tiver.
+        const obsItem = (typeof it?.obs === 'string' ? it.obs.trim().slice(0, 200) : '') || obsBatch
         const total = Number((valor * qtde).toFixed(2))
         item += 1
         await client.query(
           `INSERT INTO pedidos_terminal
              (comanda, mesa, operador, data, hora, codigo_gtin, valor, qtde, total, status, obs, impresso, atendido, item, nome)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, $10, 0, 0, $11, $12)`,
-          [comanda, mesa || null, vendedor.codigo, dataStr, horaStr, codigoGtin, valor, qtde, total, obs || null, item, nome]
+          [comanda, mesa || null, vendedor.codigo, dataStr, horaStr, codigoGtin, valor, qtde, total, obsItem || null, item, nome]
         )
         inseridos += 1
       }
@@ -154,13 +157,14 @@ export const PUT = withGarcom(async (req: NextRequest, { vendedor }) => {
         const valor = Number(it?.valor ?? it?.precoVenda) || 0
         const qtde = Number(it?.qtde ?? it?.quantidade) || 0
         if (!codigoGtin || valor <= 0 || qtde <= 0) continue
+        const obsItem = typeof it?.obs === 'string' ? it.obs.trim().slice(0, 200) : ''
         const total = Number((valor * qtde).toFixed(2))
         item += 1
         await client.query(
           `INSERT INTO pedidos_terminal
-             (comanda, mesa, operador, data, hora, codigo_gtin, valor, qtde, total, status, impresso, atendido, item, nome)
-           VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, 0, 0, 0, $9, $10)`,
-          [comanda, vendedor.codigo, dataStr, horaStr, codigoGtin, valor, qtde, total, item, nome]
+             (comanda, mesa, operador, data, hora, codigo_gtin, valor, qtde, total, status, obs, impresso, atendido, item, nome)
+           VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, 0, $9, 0, 0, $10, $11)`,
+          [comanda, vendedor.codigo, dataStr, horaStr, codigoGtin, valor, qtde, total, obsItem || null, item, nome]
         )
       }
     })
