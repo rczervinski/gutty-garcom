@@ -3,12 +3,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Minus, Trash2, Loader2, Send, ListOrdered, PlusCircle, CheckCircle2, MessageSquarePlus } from 'lucide-react'
+import { Plus, Minus, Trash2, Loader2, Send, ListOrdered, PlusCircle, CheckCircle2, MessageSquarePlus, Lock } from 'lucide-react'
 import AppHeader from '@/components/AppHeader'
 import ComandaPicker, { ComandaAberta } from '@/components/ComandaPicker'
 import { apiGet, apiPost, brl } from '@/lib/client-api'
 import { getCart, setQuantity, removeItem, clearCart, setObs, cartTotal, CART_EVENT, CartItem } from '@/lib/cart'
-import { getTargetComanda, clearTargetComanda } from '@/lib/target-comanda'
+import { getTargetComanda, clearTargetComanda, TARGET_EVENT } from '@/lib/target-comanda'
 
 export default function CheckoutPage() {
   const router = useRouter()
@@ -19,6 +19,9 @@ export default function CheckoutPage() {
   const [abertas, setAbertas] = useState<ComandaAberta[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
   const [enviando, setEnviando] = useState(false)
+  // Travado = veio de "lançar nesta comanda" (+ em Comandas abertas).
+  const [locked, setLocked] = useState(false)
+  const [targetNum, setTargetNum] = useState<number | null>(null)
 
   useEffect(() => {
     const sync = () => {
@@ -27,18 +30,25 @@ export default function CheckoutPage() {
     }
     sync()
     window.addEventListener(CART_EVENT, sync)
-    return () => window.removeEventListener(CART_EVENT, sync)
+    window.addEventListener(TARGET_EVENT, sync)
+    return () => {
+      window.removeEventListener(CART_EVENT, sync)
+      window.removeEventListener(TARGET_EVENT, sync)
+    }
   }, [])
 
   useEffect(() => {
     apiGet('/api/garcom/comandas')
       .then((j) => setAbertas(j.data || []))
       .catch(() => {})
+    // Comanda-alvo ativa → checkout vem TRAVADO nela (não limpa o estado:
+    // ele persiste até enviar, liberar ou recomeçar em "Anotar pedido").
     const t = getTargetComanda()
     if (t) {
       setComanda(String(t.comanda))
       setNome(t.nome || '')
-      clearTargetComanda()
+      setTargetNum(t.comanda)
+      setLocked(true)
     }
   }, [])
 
@@ -89,15 +99,17 @@ export default function CheckoutPage() {
 
     setEnviando(true)
     try {
-      // Deixa o servidor resolver a comanda (alinhado à produção):
-      // usa a informada, senão REUSA a comanda aberta do nome, senão cria a próxima.
+      // Servidor resolve a comanda: usa a informada, senão REUSA a aberta do
+      // nome, senão cria a próxima (alinhado à produção).
       const j = await apiPost('/api/garcom/comandas', {
         comanda: parseInt(comanda) || 0,
         nome: nome.trim(),
         items: items.map((i) => ({ codigo_gtin: i.codigoGtin, valor: i.precoVenda, qtde: i.quantidade, obs: i.obs || '' })),
       })
       const num = j?.data?.comanda
+      // Limpa o carrinho ANTES de soltar a comanda-alvo (a chave depende dela).
       clearCart()
+      clearTargetComanda()
       toast.success(existente ? `Itens adicionados à comanda ${num}` : `Pedido enviado para a comanda ${num}`)
       router.replace('/garcom')
     } catch (e: any) {
@@ -106,6 +118,9 @@ export default function CheckoutPage() {
       setEnviando(false)
     }
   }
+
+  const inputCls =
+    'w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100 disabled:text-slate-500'
 
   return (
     <main className="min-h-screen pb-40">
@@ -120,6 +135,22 @@ export default function CheckoutPage() {
           ) : undefined
         }
       />
+
+      {/* Aviso de comanda travada */}
+      {locked && targetNum !== null && (
+        <div className="flex items-start gap-2 border-b border-primary-100 bg-primary-50 px-4 py-3 text-sm text-primary-900">
+          <Lock size={16} className="mt-0.5 shrink-0 text-primary-700" />
+          <span>
+            Você está inserindo na comanda <b>{targetNum}</b>
+            {nome ? <> · <b>{nome}</b></> : null}.{' '}
+            Se deseja alterar,{' '}
+            <button onClick={() => setLocked(false)} className="font-bold underline underline-offset-2">
+              clique aqui
+            </button>
+            .
+          </span>
+        </div>
+      )}
 
       {items.length === 0 ? (
         <p className="px-4 py-16 text-center text-slate-400">Carrinho vazio</p>
@@ -163,30 +194,33 @@ export default function CheckoutPage() {
       )}
 
       <div className="space-y-3 p-4">
-        <div className="flex gap-2">
-          <button
-            onClick={() => setPickerOpen(true)}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white py-3 text-sm font-medium text-slate-700 active:scale-95"
-          >
-            <ListOrdered size={18} /> Comanda aberta {abertas.length > 0 ? `(${abertas.length})` : ''}
-          </button>
-          <button
-            onClick={novaComanda}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-sm font-medium text-white active:scale-95"
-          >
-            <PlusCircle size={18} /> Nova comanda
-          </button>
-        </div>
+        {!locked && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPickerOpen(true)}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white py-3 text-sm font-medium text-slate-700 active:scale-95"
+            >
+              <ListOrdered size={18} /> Comanda aberta {abertas.length > 0 ? `(${abertas.length})` : ''}
+            </button>
+            <button
+              onClick={novaComanda}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-stone-900 py-3 text-sm font-medium text-white active:scale-95"
+            >
+              <PlusCircle size={18} /> Nova comanda
+            </button>
+          </div>
+        )}
 
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Comanda / Mesa</label>
           <input
             value={comanda}
             onChange={(e) => onComanda(e.target.value)}
+            disabled={locked}
             inputMode="numeric"
             list="comandas-abertas"
             placeholder="Número (ou deixe vazio e informe só o nome)"
-            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+            className={inputCls}
           />
           <datalist id="comandas-abertas">
             {abertas.map((a) => (
@@ -202,9 +236,10 @@ export default function CheckoutPage() {
           <input
             value={nome}
             onChange={(e) => onNome(e.target.value)}
+            disabled={locked}
             list="clientes-abertos"
             placeholder="Nome do cliente"
-            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+            className={inputCls}
           />
           <datalist id="clientes-abertos">
             {abertas.filter((a) => a.nome).map((a) => (

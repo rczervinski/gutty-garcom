@@ -2,17 +2,21 @@
 
 import { useEffect, useState } from 'react'
 import { Utensils, X } from 'lucide-react'
-import { getTargetComanda, clearTargetComanda, TargetComanda } from '@/lib/target-comanda'
+import { getTargetComanda, clearTargetComanda, TargetComanda, TARGET_EVENT } from '@/lib/target-comanda'
 
 /**
  * Faixa fixa que lembra o garçom de que está lançando itens numa comanda já
- * existente (veio de "Adicionar itens"). Some ao cancelar.
+ * existente (veio do + em Comandas abertas). O estado persiste ao navegar/voltar;
+ * o X solta a comanda (o carrinho dela fica guardado na chave própria).
  */
 export default function TargetBanner() {
   const [target, setTarget] = useState<TargetComanda | null>(null)
 
   useEffect(() => {
-    setTarget(getTargetComanda())
+    const sync = () => setTarget(getTargetComanda())
+    sync()
+    window.addEventListener(TARGET_EVENT, sync)
+    return () => window.removeEventListener(TARGET_EVENT, sync)
   }, [])
 
   if (!target) return null
@@ -25,12 +29,9 @@ export default function TargetBanner() {
         {target.nome ? <> · {target.nome}</> : null}
       </span>
       <button
-        onClick={() => {
-          clearTargetComanda()
-          setTarget(null)
-        }}
+        onClick={() => clearTargetComanda()}
         className="grid h-7 w-7 place-items-center rounded-full text-primary-700 hover:bg-primary-100"
-        aria-label="Cancelar"
+        aria-label="Soltar comanda"
       >
         <X size={16} />
       </button>

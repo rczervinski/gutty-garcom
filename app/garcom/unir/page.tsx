@@ -2,11 +2,19 @@
 
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, GitMerge, Undo2, ArrowRight, ListOrdered } from 'lucide-react'
+import { Loader2, GitMerge, Undo2, ArrowRight, ListOrdered, Eye, PlusCircle, ShoppingBag } from 'lucide-react'
 import AppHeader from '@/components/AppHeader'
 import ComandaPicker, { ComandaAberta } from '@/components/ComandaPicker'
 import { apiGet, apiPost, brl } from '@/lib/client-api'
 
+type MovedItem = { id: number; descricao: string; qtde: number; total?: number; obs: string }
+type Detalhes = {
+  movedItems: MovedItem[]
+  destinoAntes?: MovedItem[]
+  nomeOrigem?: string
+  nomeDestino?: string
+  nomeFinal?: string
+}
 type Merge = {
   id: number
   comandaOrigem: string
@@ -14,15 +22,91 @@ type Merge = {
   nomeOrigem: string
   nomeDestino: string
   status: string
+  detalhes: Detalhes | null
 }
-type MovedItem = { id: number; descricao: string; qtde: number; obs: string }
 type Resultado = {
   tipo: 'merge' | 'undo'
   origem: number
   destino: number
-  count: number
-  movedItems: MovedItem[]
-  nomeFinal?: string
+  detalhes: Detalhes
+}
+
+function soma(itens?: MovedItem[]) {
+  return (itens || []).reduce((s, i) => s + (i.total || 0), 0)
+}
+
+/** Diff amigável de um merge: o que entrou, o que já tinha, como ficou. */
+function MergeDiff({ origem, destino, detalhes, desfeito }: { origem: string | number; destino: string | number; detalhes: Detalhes; desfeito?: boolean }) {
+  const entrou = detalhes.movedItems || []
+  const jaTinha = detalhes.destinoAntes
+  const totalEntrou = soma(entrou)
+  const totalJaTinha = soma(jaTinha)
+
+  return (
+    <div className="space-y-3 text-sm">
+      {/* O que entrou */}
+      <div className="rounded-lg border border-primary-100 bg-primary-50/60 p-3">
+        <p className="mb-1.5 flex items-center gap-1.5 font-semibold text-primary-800">
+          <PlusCircle size={15} />
+          {desfeito ? 'Itens que tinham entrado' : 'Entrou'} da comanda {origem}
+          {detalhes.nomeOrigem ? ` (${detalhes.nomeOrigem})` : ''} · {entrou.length} {entrou.length === 1 ? 'item' : 'itens'}
+          {totalEntrou > 0 ? ` · ${brl(totalEntrou)}` : ''}
+        </p>
+        <ul className="space-y-0.5">
+          {entrou.map((it) => (
+            <li key={it.id} className="flex justify-between gap-2 text-primary-900">
+              <span>
+                {it.qtde}x {it.descricao}
+                {it.obs ? <span className="text-xs italic text-amber-700"> · {it.obs}</span> : null}
+              </span>
+              {it.total ? <span className="shrink-0 font-medium">{brl(it.total)}</span> : null}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* O que já tinha no destino */}
+      {jaTinha && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="mb-1.5 flex items-center gap-1.5 font-semibold text-slate-700">
+            <ShoppingBag size={15} />
+            Já tinha na comanda {destino}
+            {detalhes.nomeDestino ? ` (${detalhes.nomeDestino})` : ''} · {jaTinha.length} {jaTinha.length === 1 ? 'item' : 'itens'}
+            {totalJaTinha > 0 ? ` · ${brl(totalJaTinha)}` : ''}
+          </p>
+          {jaTinha.length === 0 ? (
+            <p className="text-slate-500">Comanda estava vazia (nova).</p>
+          ) : (
+            <ul className="space-y-0.5">
+              {jaTinha.map((it) => (
+                <li key={it.id} className="flex justify-between gap-2 text-slate-700">
+                  <span>
+                    {it.qtde}x {it.descricao}
+                    {it.obs ? <span className="text-xs italic text-amber-700"> · {it.obs}</span> : null}
+                  </span>
+                  {it.total ? <span className="shrink-0 font-medium">{brl(it.total)}</span> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* Como ficou */}
+      {jaTinha && !desfeito && (
+        <div className="flex items-center justify-between rounded-lg bg-stone-900 px-3 py-2 text-white">
+          <span className="font-medium">
+            Comanda {destino}
+            {detalhes.nomeFinal ? ` · ${detalhes.nomeFinal}` : ''} ficou com {entrou.length + jaTinha.length} itens
+          </span>
+          <span className="font-bold">{brl(totalEntrou + totalJaTinha)}</span>
+        </div>
+      )}
+      {desfeito && (
+        <p className="text-xs text-slate-500">Este merge foi desfeito — os itens voltaram para a comanda {origem}.</p>
+      )}
+    </div>
+  )
 }
 
 export default function UnirPage() {
@@ -33,6 +117,7 @@ export default function UnirPage() {
   const [unindo, setUnindo] = useState(false)
   const [pickerFor, setPickerFor] = useState<'origem' | 'destino' | null>(null)
   const [resultado, setResultado] = useState<Resultado | null>(null)
+  const [verMerge, setVerMerge] = useState<number | null>(null)
 
   async function carregar() {
     try {
@@ -65,9 +150,13 @@ export default function UnirPage() {
         tipo: 'merge',
         origem: j.origem,
         destino: j.destino,
-        count: j.movidos,
-        movedItems: j.movedItems || [],
-        nomeFinal: j.nomeFinal || '',
+        detalhes: {
+          movedItems: j.movedItems || [],
+          destinoAntes: j.destinoAntes || [],
+          nomeOrigem: j.nomeOrigem || '',
+          nomeDestino: j.nomeDestino || '',
+          nomeFinal: j.nomeFinal || '',
+        },
       })
       setOrigem('')
       setDestino('')
@@ -87,9 +176,9 @@ export default function UnirPage() {
         tipo: 'undo',
         origem: j.origem,
         destino: j.destino,
-        count: j.devolvidos,
-        movedItems: j.movedItems || [],
+        detalhes: { movedItems: j.movedItems || [] },
       })
+      setVerMerge(null)
       carregar()
     } catch (e: any) {
       toast.error(e?.message || 'Erro ao desfazer')
@@ -127,7 +216,6 @@ export default function UnirPage() {
           </div>
         </div>
 
-        {/* datalists dinâmicos com as comandas abertas */}
         <datalist id="abertas-origem">
           {abertas.map((a) => (
             <option key={a.comanda} value={a.comanda}>{a.nome || `Comanda ${a.comanda}`}</option>
@@ -157,34 +245,37 @@ export default function UnirPage() {
         <button
           onClick={unir}
           disabled={unindo}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 py-3 font-semibold text-white shadow-card transition active:scale-[0.99] disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 py-3 font-semibold text-white shadow-card transition active:scale-[0.99] disabled:opacity-60"
         >
           {unindo ? <Loader2 className="animate-spin" size={20} /> : <GitMerge size={20} />}
           Unir comandas
         </button>
       </div>
 
-      {/* Diff da última ação */}
+      {/* Resultado da última ação (unir/desfazer) */}
       {resultado && (
         <div className="mx-4 mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-card animate-fade-in">
-          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
-            {resultado.tipo === 'merge' ? <GitMerge size={16} className="text-amber-600" /> : <Undo2 size={16} className="text-slate-600" />}
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
+            {resultado.tipo === 'merge' ? <GitMerge size={16} className="text-primary-600" /> : <Undo2 size={16} className="text-slate-600" />}
             {resultado.tipo === 'merge'
               ? `Comanda ${resultado.origem} → ${resultado.destino}`
-              : `Desfeito: ${resultado.destino} → ${resultado.origem}`}
-            <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{resultado.count} itens</span>
+              : `Desfeito: itens voltaram para a comanda ${resultado.origem}`}
           </div>
-          {resultado.nomeFinal ? (
-            <p className="mb-2 text-xs text-slate-500">Nome da comanda: <b>{resultado.nomeFinal}</b></p>
-          ) : null}
-          <ul className="space-y-1">
-            {resultado.movedItems.map((it) => (
-              <li key={it.id} className="text-sm">
-                <span className="text-slate-700">{it.qtde}x {it.descricao}</span>
-                {it.obs ? <span className="text-xs italic text-amber-700"> · {it.obs}</span> : null}
-              </li>
-            ))}
-          </ul>
+          {resultado.tipo === 'merge' ? (
+            <MergeDiff origem={resultado.origem} destino={resultado.destino} detalhes={resultado.detalhes} />
+          ) : (
+            <ul className="space-y-0.5 text-sm">
+              {resultado.detalhes.movedItems.map((it) => (
+                <li key={it.id} className="flex justify-between gap-2 text-slate-700">
+                  <span>
+                    {it.qtde}x {it.descricao}
+                    {it.obs ? <span className="text-xs italic text-amber-700"> · {it.obs}</span> : null}
+                  </span>
+                  {it.total ? <span className="shrink-0 font-medium">{brl(it.total)}</span> : null}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
@@ -195,22 +286,46 @@ export default function UnirPage() {
         ) : (
           <ul className="space-y-2">
             {recentes.map((m) => (
-              <li key={m.id} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-card">
-                <div className="min-w-0 flex-1 text-sm">
-                  <p className="font-medium text-slate-800">
-                    {m.comandaOrigem}{m.nomeOrigem ? ` (${m.nomeOrigem})` : ''} → {m.comandaDestino}{m.nomeDestino ? ` (${m.nomeDestino})` : ''}
-                  </p>
-                  <p className={m.status === 'desfeito' ? 'text-slate-400' : 'text-emerald-600'}>
-                    {m.status === 'desfeito' ? 'Desfeito' : 'Ativo'}
-                  </p>
-                </div>
-                {m.status === 'ativo' && (
+              <li key={m.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
+                <div className="flex items-center gap-2 p-3">
+                  <div className="min-w-0 flex-1 text-sm">
+                    <p className="font-medium text-slate-800">
+                      {m.comandaOrigem}{m.nomeOrigem ? ` (${m.nomeOrigem})` : ''} → {m.comandaDestino}{m.nomeDestino ? ` (${m.nomeDestino})` : ''}
+                    </p>
+                    <p className={m.status === 'desfeito' ? 'text-slate-400' : 'text-emerald-600'}>
+                      {m.status === 'desfeito' ? 'Desfeito' : 'Ativo'}
+                    </p>
+                  </div>
                   <button
-                    onClick={() => desfazer(m.id)}
-                    className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 active:scale-95"
+                    onClick={() => setVerMerge(verMerge === m.id ? null : m.id)}
+                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${verMerge === m.id ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+                    aria-label="Visualizar merge"
                   >
-                    <Undo2 size={16} /> Desfazer
+                    <Eye size={16} />
                   </button>
+                  {m.status === 'ativo' && (
+                    <button
+                      onClick={() => desfazer(m.id)}
+                      className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 active:scale-95"
+                    >
+                      <Undo2 size={16} /> Desfazer
+                    </button>
+                  )}
+                </div>
+
+                {verMerge === m.id && (
+                  <div className="border-t border-slate-100 px-3 py-3">
+                    {m.detalhes ? (
+                      <MergeDiff
+                        origem={m.comandaOrigem}
+                        destino={m.comandaDestino}
+                        detalhes={m.detalhes}
+                        desfeito={m.status === 'desfeito'}
+                      />
+                    ) : (
+                      <p className="text-sm text-slate-400">Sem detalhes registrados (merge antigo).</p>
+                    )}
+                  </div>
                 )}
               </li>
             ))}

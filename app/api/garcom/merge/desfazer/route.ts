@@ -29,7 +29,7 @@ export const POST = withGarcom(async (req: NextRequest) => {
 
       // Itens que vão voltar (diff), ainda no destino.
       const movedRes = await client.query(
-        `SELECT pt.codigo, pt.qtde, pt.obs,
+        `SELECT pt.codigo, pt.qtde, pt.total, pt.obs,
                 COALESCE((SELECT descricao FROM produtos WHERE codigo_gtin = pt.codigo_gtin LIMIT 1), pt.codigo_gtin) AS descricao
            FROM pedidos_terminal pt
           WHERE pt.codigo = ANY($1) AND pt.comanda = $2`,
@@ -39,6 +39,7 @@ export const POST = withGarcom(async (req: NextRequest) => {
         id: Number(row.codigo),
         descricao: row.descricao,
         qtde: Number(row.qtde) || 0,
+        total: Number(row.total) || 0,
         obs: row.obs || '',
       }))
 
