@@ -18,7 +18,9 @@ export const GET = withGarcom(async (req: NextRequest) => {
     return NextResponse.json({ success: false, error: 'Informe categoria ou q' }, { status: 400 })
   }
 
-  // Alinhado à produção: INNER JOIN produtos + só ATIVOS (status='E').
+  // Mostra TUDO (sem depender de produtos.status, igual ao app Cielo),
+  // exceto produtos marcados como INATIVOS em produtos_ou.inativo —
+  // mesmo predicado do caixa (NULL/'0' = ativo).
   const base = `
     SELECT
       ib.codigo_interno              AS codigo_interno,
@@ -33,17 +35,18 @@ export const GET = withGarcom(async (req: NextRequest) => {
     INNER JOIN produtos_ib ib ON ib.codigo_interno = p.codigo_interno
     LEFT JOIN produtos_ou ou  ON ou.codigo_interno = p.codigo_interno
   `
+  const ativo = `(ou.inativo IS NULL OR ou.inativo = '0')`
 
   let r
   if (categoria) {
     // Categoria case-insensitive (igual à produção: upper()=upper()).
     r = await query(
-      `${base} WHERE p.status = 'E' AND upper(ib.categoria) = upper($1) ORDER BY p.descricao`,
+      `${base} WHERE ${ativo} AND upper(ib.categoria) = upper($1) ORDER BY p.descricao`,
       [categoria]
     )
   } else {
     r = await query(
-      `${base} WHERE p.status = 'E'
+      `${base} WHERE ${ativo}
          AND (p.codigo_gtin ILIKE $1 OR ib.descricao_detalhada ILIKE $1 OR p.descricao ILIKE $1)
        ORDER BY p.descricao LIMIT 60`,
       [`%${q}%`]
