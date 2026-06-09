@@ -18,6 +18,7 @@ export const GET = withGarcom(async (req: NextRequest) => {
     return NextResponse.json({ success: false, error: 'Informe categoria ou q' }, { status: 400 })
   }
 
+  // Alinhado à produção: INNER JOIN produtos + só ATIVOS (status='E').
   const base = `
     SELECT
       ib.codigo_interno              AS codigo_interno,
@@ -28,18 +29,23 @@ export const GET = withGarcom(async (req: NextRequest) => {
       ib.categoria                   AS categoria,
       ib.preco_venda                 AS preco_venda,
       COALESCE(ou.qtde, 0)           AS qtde
-    FROM produtos_ib ib
-    LEFT JOIN produtos    p  ON ib.codigo_interno = p.codigo_interno
-    LEFT JOIN produtos_ou ou ON ib.codigo_interno = ou.codigo_interno
+    FROM produtos p
+    INNER JOIN produtos_ib ib ON ib.codigo_interno = p.codigo_interno
+    LEFT JOIN produtos_ou ou  ON ou.codigo_interno = p.codigo_interno
   `
 
   let r
   if (categoria) {
-    r = await query(`${base} WHERE ib.categoria = $1 ORDER BY ib.descricao_detalhada`, [categoria])
+    // Categoria case-insensitive (igual à produção: upper()=upper()).
+    r = await query(
+      `${base} WHERE p.status = 'E' AND upper(ib.categoria) = upper($1) ORDER BY p.descricao`,
+      [categoria]
+    )
   } else {
     r = await query(
-      `${base} WHERE (p.codigo_gtin ILIKE $1 OR ib.descricao_detalhada ILIKE $1 OR p.descricao ILIKE $1)
-       ORDER BY ib.descricao_detalhada LIMIT 60`,
+      `${base} WHERE p.status = 'E'
+         AND (p.codigo_gtin ILIKE $1 OR ib.descricao_detalhada ILIKE $1 OR p.descricao ILIKE $1)
+       ORDER BY p.descricao LIMIT 60`,
       [`%${q}%`]
     )
   }

@@ -89,18 +89,14 @@ export default function CheckoutPage() {
 
     setEnviando(true)
     try {
-      let num = parseInt(comanda)
-      if (!num) {
-        // Só o nome foi informado → cria comanda automaticamente (estilo Cielo).
-        const j = await apiGet('/api/garcom/proxima-comanda')
-        num = j.data
-      }
-      await apiPost('/api/garcom/comandas', {
-        comanda: num,
-        mesa: num,
+      // Deixa o servidor resolver a comanda (alinhado à produção):
+      // usa a informada, senão REUSA a comanda aberta do nome, senão cria a próxima.
+      const j = await apiPost('/api/garcom/comandas', {
+        comanda: parseInt(comanda) || 0,
         nome: nome.trim(),
         items: items.map((i) => ({ codigo_gtin: i.codigoGtin, valor: i.precoVenda, qtde: i.quantidade, obs: i.obs || '' })),
       })
+      const num = j?.data?.comanda
       clearCart()
       toast.success(existente ? `Itens adicionados à comanda ${num}` : `Pedido enviado para a comanda ${num}`)
       router.replace('/garcom')

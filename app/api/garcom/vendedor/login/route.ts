@@ -8,31 +8,37 @@ export const runtime = 'nodejs'
 
 /**
  * POST /api/garcom/vendedor/login
- * Body: { codigo, senha }
- * Valida em `vendedores` (senha texto plano — padrão legado C).
- * Em sucesso, emite cookie GARCOM_VENDEDOR e retorna o nome do vendedor.
+ * Body: { vendedor, senha }   (aceita CÓDIGO ou NOME no campo `vendedor`)
  *
+ * Alinhado com o sistema de produção (login por nome+senha) e com a opção de
+ * código: o campo `vendedor` casa por código (se numérico) OU por nome.
+ * Senha em texto plano — padrão legado C.
  * Exige o login de empresa (AUTH_TOKEN) — withTenant resolve o banco do tenant.
  */
 export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json().catch(() => ({}))
-  const codigo = parseInt(body?.codigo)
+  const raw = String(body?.vendedor ?? body?.codigo ?? '').trim()
   const senha = typeof body?.senha === 'string' ? body.senha : ''
 
-  if (!codigo || !senha) {
-    return NextResponse.json({ success: false, error: 'Informe código e senha' }, { status: 400 })
+  if (!raw || !senha) {
+    return NextResponse.json({ success: false, error: 'Informe o vendedor e a senha' }, { status: 400 })
   }
+
+  const codigoNum = /^\d+$/.test(raw) ? Number(raw) : null
 
   const r = await query(
     `SELECT codigo, nome
        FROM vendedores
-      WHERE codigo = $1 AND senha = $2 AND COALESCE(inativo, 0) = 0
+      WHERE senha = $1
+        AND COALESCE(inativo, 0) = 0
+        AND ( ($2::int IS NOT NULL AND codigo = $2::int) OR upper(nome) = upper($3) )
+      ORDER BY codigo
       LIMIT 1`,
-    [codigo, senha]
+    [senha, codigoNum, raw]
   )
 
   if (r.rows.length === 0) {
-    return NextResponse.json({ success: false, error: 'Código ou senha inválidos' }, { status: 401 })
+    return NextResponse.json({ success: false, error: 'Vendedor ou senha inválidos' }, { status: 401 })
   }
 
   const vendedor = {

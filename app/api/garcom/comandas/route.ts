@@ -75,15 +75,16 @@ export const GET = withGarcom(async (req: NextRequest) => {
 
 export const POST = withGarcom(async (req: NextRequest, { vendedor }) => {
   const body = await req.json().catch(() => null)
-  const comanda = parseInt(body?.comanda) || 0
-  const mesa = parseInt(body?.mesa) || comanda
+  const comandaIn = parseInt(body?.comanda) || 0
+  const mesaIn = parseInt(body?.mesa) || 0
   const nomeRaw = typeof body?.nome === 'string' ? body.nome.trim() : ''
   const nome = nomeRaw ? nomeRaw.toUpperCase() : null
   const obsBatch = typeof body?.obs === 'string' ? body.obs.trim().slice(0, 200) : ''
   const items: any[] = Array.isArray(body?.items) ? body.items : []
 
-  if (!comanda || items.length === 0) {
-    return NextResponse.json({ success: false, error: 'Comanda e itens são obrigatórios' }, { status: 400 })
+  // Comanda OU nome são obrigatórios (a comanda pode ser resolvida pelo nome).
+  if ((!comandaIn && !nome) || items.length === 0) {
+    return NextResponse.json({ success: false, error: 'Informe a comanda ou o nome, e ao menos um item' }, { status: 400 })
   }
 
   const now = new Date()
@@ -92,6 +93,27 @@ export const POST = withGarcom(async (req: NextRequest, { vendedor }) => {
 
   try {
     const result = await transaction(async (client) => {
+      // Resolução da comanda (alinhado à produção `enviarPedido`):
+      // 1) usa a informada; 2) senão, REUSA a comanda aberta daquele nome;
+      // 3) senão, max(comanda)+1 entre as abertas (status=0), mínimo 1.
+      let comanda = comandaIn
+      if (!comanda) {
+        if (nome) {
+          const ex = await client.query(
+            `SELECT comanda FROM pedidos_terminal WHERE status = 0 AND nome = $1 ORDER BY comanda LIMIT 1`,
+            [nome]
+          )
+          if (ex.rows.length > 0) comanda = Number(ex.rows[0].comanda)
+        }
+        if (!comanda) {
+          const mx = await client.query(
+            `SELECT COALESCE(MAX(comanda), 0) + 1 AS next FROM pedidos_terminal WHERE status = 0`
+          )
+          comanda = Number(mx.rows[0]?.next) || 1
+        }
+      }
+      const mesa = mesaIn || comanda
+
       const itemRes = await client.query(
         `SELECT COALESCE(MAX(item), 0) AS maxitem FROM pedidos_terminal WHERE comanda = $1`,
         [comanda]
@@ -112,16 +134,16 @@ export const POST = withGarcom(async (req: NextRequest, { vendedor }) => {
           `INSERT INTO pedidos_terminal
              (comanda, mesa, operador, data, hora, codigo_gtin, valor, qtde, total, status, obs, impresso, atendido, item, nome)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, $10, 0, 0, $11, $12)`,
-          [comanda, mesa || null, vendedor.codigo, dataStr, horaStr, codigoGtin, valor, qtde, total, obsItem || null, item, nome]
+          [comanda, mesa, vendedor.codigo, dataStr, horaStr, codigoGtin, valor, qtde, total, obsItem || null, item, nome]
         )
         inseridos += 1
       }
 
       if (inseridos === 0) throw new Error('Nenhum item válido para inserir')
-      return inseridos
+      return { comanda, inseridos }
     })
 
-    return NextResponse.json({ success: true, data: { comanda, inseridos: result } }, { status: 201 })
+    return NextResponse.json({ success: true, data: result }, { status: 201 })
   } catch (e: any) {
     console.error('[comandas POST]', e?.message)
     return NextResponse.json({ success: false, error: 'Erro ao salvar pedido' }, { status: 500 })

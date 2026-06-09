@@ -6,22 +6,30 @@ import { toast } from 'sonner'
 import { UserRound, Loader2 } from 'lucide-react'
 import { apiPost } from '@/lib/client-api'
 
+type Modo = 'codigo' | 'nome'
+
 export default function LoginVendedorPage() {
   const router = useRouter()
-  const [codigo, setCodigo] = useState('')
+  const [modo, setModo] = useState<Modo>('codigo')
+  const [vendedor, setVendedor] = useState('')
   const [senha, setSenha] = useState('')
   const [loading, setLoading] = useState(false)
 
+  function onVendedor(v: string) {
+    // No modo "código" aceita só dígitos; no modo "nome" aceita texto livre.
+    setVendedor(modo === 'codigo' ? v.replace(/\D/g, '') : v)
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!codigo || !senha) return
+    if (!vendedor || !senha) return
     setLoading(true)
     try {
-      const json = await apiPost('/api/garcom/vendedor/login', { codigo, senha })
+      const json = await apiPost('/api/garcom/vendedor/login', { vendedor, senha })
       toast.success(`Olá, ${json.vendedor.nome}`)
       router.replace('/garcom')
     } catch (err: any) {
-      toast.error(err?.message || 'Código ou senha inválidos')
+      toast.error(err?.message || 'Vendedor ou senha inválidos')
     } finally {
       setLoading(false)
     }
@@ -34,19 +42,39 @@ export default function LoginVendedorPage() {
           <UserRound size={30} />
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Login do garçom</h1>
-        <p className="mt-1 text-sm text-slate-500">Informe seu código e senha</p>
+        <p className="mt-1 text-sm text-slate-500">Entre com seu código ou nome</p>
       </div>
 
       <form onSubmit={submit} className="space-y-4">
+        {/* Switch Código / Nome */}
+        <div className="flex rounded-xl bg-slate-100 p-1">
+          {(['codigo', 'nome'] as Modo[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => {
+                setModo(m)
+                setVendedor('')
+              }}
+              className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
+                modo === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              {m === 'codigo' ? 'Código' : 'Nome'}
+            </button>
+          ))}
+        </div>
+
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Código</label>
+          <label className="mb-1 block text-sm font-medium text-slate-700">{modo === 'codigo' ? 'Código' : 'Nome'}</label>
           <input
-            value={codigo}
-            onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ''))}
-            inputMode="numeric"
+            value={vendedor}
+            onChange={(e) => onVendedor(e.target.value)}
+            inputMode={modo === 'codigo' ? 'numeric' : 'text'}
+            autoCapitalize={modo === 'codigo' ? 'none' : 'characters'}
             autoFocus
             className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
-            placeholder="Ex.: 12"
+            placeholder={modo === 'codigo' ? 'Ex.: 12' : 'Nome do vendedor'}
           />
         </div>
         <div>
