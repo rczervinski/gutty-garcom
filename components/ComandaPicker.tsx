@@ -62,9 +62,10 @@ export default function ComandaPicker({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40" onClick={onClose}>
+    // Celular: bottom sheet. Tablet/totem/PC: modal centrado.
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center sm:p-6" onClick={onClose} role="dialog" aria-modal="true" aria-label="Escolher comanda aberta">
       <div
-        className="mx-auto flex max-h-[85vh] w-full max-w-md flex-col rounded-t-2xl bg-white animate-fade-in-up"
+        className="mx-auto flex max-h-[85vh] w-full max-w-md flex-col rounded-t-2xl bg-white animate-fade-in-up sm:max-h-[70vh] sm:rounded-2xl sm:shadow-elevated"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">

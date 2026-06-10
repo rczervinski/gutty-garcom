@@ -189,7 +189,10 @@ export default function UnirPage() {
     <main className="min-h-screen pb-10">
       <AppHeader title="Unir comandas" back="/garcom" />
 
-      <div className="space-y-4 p-4">
+      {/* Celular: empilhado. PC/totem: formulário+resultado | recentes. */}
+      <div className="mx-auto w-full max-w-6xl lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:px-4 lg:pt-4">
+      <div>
+      <div className="space-y-4 p-4 lg:p-0">
         <div className="flex items-end gap-2">
           <div className="flex-1">
             <label className="mb-1 block text-sm font-medium text-slate-700">Origem</label>
@@ -254,7 +257,7 @@ export default function UnirPage() {
 
       {/* Resultado da última ação (unir/desfazer) */}
       {resultado && (
-        <div className="mx-4 mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-card animate-fade-in">
+        <div className="mx-4 mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-card animate-fade-in lg:mx-0 lg:mt-4">
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
             {resultado.tipo === 'merge' ? <GitMerge size={16} className="text-primary-600" /> : <Undo2 size={16} className="text-slate-600" />}
             {resultado.tipo === 'merge'
@@ -278,8 +281,9 @@ export default function UnirPage() {
           )}
         </div>
       )}
+      </div>
 
-      <div className="px-4">
+      <div className="px-4 lg:px-0">
         <h2 className="mb-2 text-sm font-semibold text-slate-700">Merges recentes (24h)</h2>
         {recentes.length === 0 ? (
           <p className="py-6 text-center text-sm text-slate-400">Nenhum merge recente</p>
@@ -331,6 +335,7 @@ export default function UnirPage() {
             ))}
           </ul>
         )}
+      </div>
       </div>
 
       <ComandaPicker open={pickerFor !== null} abertas={abertas} onPick={onPick} onClose={() => setPickerFor(null)} />

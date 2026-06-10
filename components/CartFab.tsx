@@ -23,8 +23,9 @@ export default function CartFab() {
 
   if (count === 0) return null
 
+  // lg+: o painel lateral "Pedido atual" já está sempre visível — sem FAB.
   return (
-    <div className="safe-bottom pointer-events-none fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md p-4">
+    <div className="safe-bottom pointer-events-none fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md p-4 lg:hidden">
       <button
         onClick={() => router.push('/garcom/checkout')}
         className="pointer-events-auto flex w-full items-center justify-between rounded-2xl bg-primary-600 px-5 py-4 text-white shadow-elevated transition active:scale-[0.99]"

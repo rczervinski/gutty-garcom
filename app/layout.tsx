@@ -35,7 +35,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" className={`${inter.variable} ${fustat.variable}`}>
       <body className={inter.className}>
-        <div className="mx-auto min-h-screen max-w-md bg-slate-50">{children}</div>
+        {/* Largura total: cada tela gerencia seu próprio container (universal:
+            celular, tablet, totem e PC). */}
+        <div className="min-h-screen bg-slate-50">{children}</div>
         <Toaster position="top-center" richColors />
       </body>
     </html>

@@ -45,44 +45,47 @@ export default function MenuPage() {
 
   return (
     <main className="min-h-screen">
-      <header className="bg-stone-900 px-5 pb-5 pt-6 text-white">
-        <div className="flex items-start justify-between">
-          <div>
-            {/* Logo na MESMA linha: GUTTY + PEDIDOS */}
-            <h1 className="flex items-baseline gap-2">
-              <span className="gutty-shine-dark font-display text-3xl font-extrabold leading-none tracking-tighter">GUTTY</span>
-              <span className="text-xs font-semibold uppercase tracking-[0.3em] text-primary-300">Pedidos</span>
-            </h1>
-            {empresa && (
-              <p className="mt-1.5 flex items-center gap-1.5 text-sm text-stone-300">
-                <Store size={14} className="text-primary-400" />
-                <span className="font-medium">{empresa}</span>
-              </p>
-            )}
+      <header className="bg-stone-900 text-white">
+        <div className="mx-auto w-full max-w-5xl px-5 pb-5 pt-6">
+          <div className="flex items-start justify-between">
+            <div>
+              {/* Logo na MESMA linha: GUTTY + PEDIDOS */}
+              <h1 className="flex items-baseline gap-2">
+                <span className="gutty-shine-dark font-display text-3xl font-extrabold leading-none tracking-tighter">GUTTY</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.3em] text-primary-300">Pedidos</span>
+              </h1>
+              {empresa && (
+                <p className="mt-1.5 flex items-center gap-1.5 text-sm text-stone-300">
+                  <Store size={14} className="text-primary-400" />
+                  <span className="font-medium">{empresa}</span>
+                </p>
+              )}
+            </div>
+            <button onClick={sair} className="grid h-11 w-11 place-items-center rounded-full text-stone-400 hover:bg-white/10" aria-label="Sair">
+              <LogOut size={20} />
+            </button>
           </div>
-          <button onClick={sair} className="grid h-10 w-10 place-items-center rounded-full text-stone-400 hover:bg-white/10" aria-label="Sair">
-            <LogOut size={20} />
-          </button>
-        </div>
-        <div className="mt-3 flex items-center gap-2 text-sm text-stone-300">
-          <UserRound size={16} className="text-primary-400" />
-          <span className="font-medium text-white">{nome || '...'}</span>
+          <div className="mt-3 flex items-center gap-2 text-sm text-stone-300">
+            <UserRound size={16} className="text-primary-400" />
+            <span className="font-medium text-white">{nome || '...'}</span>
+          </div>
         </div>
       </header>
 
-      <div className="space-y-3 p-4">
+      {/* Celular: lista empilhada. Tablet/totem/PC: três cartões lado a lado. */}
+      <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-3 p-4 sm:grid-cols-3 sm:gap-4 sm:p-6">
         {cards.map((c) => {
           const Icon = c.icon
           return (
             <button
               key={c.label}
               onClick={c.onClick}
-              className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-card transition active:scale-[0.99]"
+              className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-card transition hover:border-primary-200 hover:shadow-card-hover active:scale-[0.99] sm:flex-col sm:items-start sm:gap-5 sm:p-6"
             >
-              <div className={`grid h-12 w-12 place-items-center rounded-xl text-white ${c.color}`}>
+              <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl text-white sm:h-14 sm:w-14 ${c.color}`}>
                 <Icon size={24} />
               </div>
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <p className="text-base font-semibold text-slate-900">{c.label}</p>
                 <p className="text-sm text-slate-500">{c.desc}</p>
               </div>

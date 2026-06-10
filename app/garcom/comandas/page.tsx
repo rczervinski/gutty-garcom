@@ -78,6 +78,7 @@ export default function ComandasPage() {
         }
       />
 
+      <div className="mx-auto w-full max-w-5xl">
       <div className="p-3">
         <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3">
           <Search size={18} className="text-slate-400" />
@@ -85,7 +86,7 @@ export default function ComandasPage() {
             value={filtro}
             onChange={(e) => setFiltro(e.target.value)}
             placeholder="Buscar por número ou nome"
-            className="w-full bg-transparent py-2.5 text-base outline-none"
+            className="min-h-11 w-full bg-transparent py-2.5 text-base outline-none"
           />
         </div>
       </div>
@@ -99,7 +100,7 @@ export default function ComandasPage() {
           {lista.length === 0 ? 'Nenhuma comanda aberta' : 'Nenhuma comanda encontrada'}
         </p>
       ) : (
-        <ul className="space-y-2 px-3">
+        <ul className="grid grid-cols-1 items-start gap-2 px-3 lg:grid-cols-2">
           {vis.map((c) => (
             <li key={`${c.comanda}-${c.nome}`} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
               <div className="flex items-center gap-3 p-4">
@@ -116,8 +117,8 @@ export default function ComandasPage() {
                 </button>
                 <button
                   onClick={() => adicionarItens(c)}
-                  className="grid h-10 w-10 place-items-center rounded-lg bg-primary-600 text-white active:scale-95"
-                  aria-label="Adicionar itens"
+                  className="grid h-11 w-11 place-items-center rounded-lg bg-primary-600 text-white active:scale-95"
+                  aria-label={`Adicionar itens na comanda ${c.comanda}`}
                 >
                   <PlusCircle size={20} />
                 </button>
@@ -151,6 +152,7 @@ export default function ComandasPage() {
           ))}
         </ul>
       )}
+      </div>
     </main>
   )
 }

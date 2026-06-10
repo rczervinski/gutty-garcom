@@ -35,12 +35,12 @@ export default function LoginEmpresaPage() {
   }
 
   return (
-    <main className="relative flex min-h-screen flex-col justify-center overflow-hidden bg-stone-50 px-6">
+    <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-stone-50 px-6">
       {/* Acentos quentes de fundo (igual ao caixa) */}
       <div className="pointer-events-none absolute -top-32 -right-32 h-96 w-96 rounded-full bg-orange-200/40 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-amber-100/50 blur-3xl" />
 
-      <div className="relative">
+      <div className="relative w-full max-w-md">
         {/* Logo GUTTY PEDIDOS com shine */}
         <div className="mb-10 text-center">
           <h1 className="font-display text-6xl font-extrabold tracking-tighter">
