@@ -22,8 +22,13 @@ export const dynamic = 'force-dynamic'
  * `/api/balcao/garcom/pedidos?ativos=1` lá.
  */
 
-/** A retaguarda pode estar em outra VPS: 20s cobre cold start sem prender a tela. */
-const TIMEOUT_MS = 20_000
+/**
+ * A retaguarda pode estar em outra VPS. 45s porque o cardápio de uma loja com
+ * muitos produtos já levou 35s lá (a montagem lista as fotos de cada item e o
+ * banco é remoto) — com 20s o garçom recebia `retaguarda_indisponivel` numa
+ * chamada que ia responder.
+ */
+const TIMEOUT_MS = 45_000
 
 const indisponivel = (motivo: string) => {
   console.error('[balcao] retaguarda indisponivel:', motivo)

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, Lock, Armchair, ClipboardList, AlertTriangle, Plus } from 'lucide-react'
+import { Loader2, Lock, Armchair, ClipboardList, AlertTriangle, Plus, ShoppingBag } from 'lucide-react'
 import { COR_PADRAO } from './theme'
 import {
   mascararCpf, mascararFone, soDigitos,
@@ -15,9 +15,28 @@ import {
  * A comanda é o centro de gravidade do app: quem resolve mesa × comanda é o
  * servidor, e esta tela obedece. Ela preenche e TRAVA o cliente da comanda/mesa,
  * trava a mesa da comanda escolhida, desabilita a comanda quando a mesa é conta
- * direta e mostra o erro com a saída pronta ("Abrir comanda 3"). Nome é opcional:
- * dá pra identificar só pela mesa, só pela comanda ou pela senha.
+ * direta e mostra o erro com a saída pronta ("Abrir comanda 3"). Nome é opcional.
+ *
+ * O salão aparece como LISTA (uma linha por mesa, comandas à direita) em vez de
+ * chips soltos: com 10 mesas abertas, um monte de pílulas do mesmo tamanho não
+ * diz mais onde termina uma mesa e começa a outra.
  */
+
+/** Linha da lista "Abertas agora". */
+type LinhaMesa = {
+  codigo: number
+  numero: number
+  nome: string | null
+  comandas: { codigo: number; numero: string; cliente_nome: string | null }[]
+  proxima: string | null
+}
+
+/** Próxima comanda da mesa: maior número + 1 (§10). Sem número, sem sugestão. */
+function proximaDaMesa(comandas: { numero: string }[]): string | null {
+  const nums = comandas.map((c) => Number(c.numero)).filter((n) => Number.isFinite(n))
+  return nums.length ? String(Math.max(...nums) + 1) : null
+}
+
 export default function Identificacao({
   api,
   prefill,
@@ -41,6 +60,7 @@ export default function Identificacao({
 
   const [comandasAbertas, setComandasAbertas] = useState<ComandaAberta[]>([])
   const [mesasAbertas, setMesasAbertas] = useState<MesaAberta[]>([])
+  const [carregandoLista, setCarregandoLista] = useState(true)
   const [ident, setIdent] = useState<IdentResposta | null>(null)
   const [validando, setValidando] = useState(false)
 
@@ -58,8 +78,10 @@ export default function Identificacao({
   useEffect(() => { setErroExterno(erroServidor || null) }, [erroServidor])
 
   useEffect(() => {
-    api.get('/comandas?status=aberta').then((d) => { if (d?.success) setComandasAbertas(d.comandas || []) })
-    api.get('/mesas').then((d) => { if (d?.success) setMesasAbertas(d.mesas || []) })
+    let pendentes = 2
+    const pronto = () => { pendentes -= 1; if (pendentes <= 0) setCarregandoLista(false) }
+    api.get('/comandas?status=aberta').then((d) => { if (d?.success) setComandasAbertas(d.comandas || []) }).finally(pronto)
+    api.get('/mesas').then((d) => { if (d?.success) setMesasAbertas(d.mesas || []) }).finally(pronto)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -132,49 +154,34 @@ export default function Identificacao({
 
   const textoOnde = ident?.comanda
     ? `Comanda ${ident.comanda.numero}${ident.comanda.mesa_numero != null ? ` · mesa ${ident.comanda.mesa_numero}` : ' · sem mesa'}.`
-    : ident?.mesa?.modo === 'conta'
-      ? `Mesa ${ident.mesa.numero} tem conta direto na mesa.`
-      : ident?.mesa?.modo === 'comandas'
-        ? `Mesa ${ident.mesa.numero} trabalha com comandas — escolha uma ou abra a próxima.`
-        : 'Sem mesa e sem comanda o pedido é avulso, pra levar.'
+    : ident?.mesa
+      ? `Mesa ${ident.mesa.numero} selecionada.`
+      : 'Escolha na lista ou digite o número.'
 
-  function rotuloChipMesa(m: MesaAberta): string {
-    const base = `Mesa ${m.numero}`
-    if (m.modo === 'comandas') {
-      const n = m.comandas?.length ?? 0
-      return `${base} · ${n} ${n === 1 ? 'comanda' : 'comandas'}`
-    }
-    if (m.modo === 'conta') return `${base} · Conta${m.nome ? ` · ${m.nome}` : ''}`
-    return m.nome ? `${base} · ${m.nome}` : base
-  }
+  /** Uma linha por mesa aberta, em ordem numérica. */
+  const linhasMesa = useMemo<LinhaMesa[]>(() => {
+    return mesasAbertas
+      .map((m) => {
+        const cs = (m.comandas || [])
+          .map((c) => ({ codigo: Number(c.codigo), numero: String(c.numero ?? ''), cliente_nome: c.cliente_nome ?? null }))
+          .filter((c) => c.numero)
+        // Se esta é a mesa selecionada, a próxima comanda vem do servidor.
+        const doServidor = ident?.mesa?.numero === Number(m.numero) ? ident?.mesa?.proxima_comanda ?? null : null
+        return {
+          codigo: m.codigo,
+          numero: Number(m.numero),
+          nome: m.nome ?? null,
+          comandas: cs,
+          proxima: doServidor ?? proximaDaMesa(cs),
+        }
+      })
+      .sort((a, b) => a.numero - b.numero)
+  }, [mesasAbertas, ident])
 
-  /**
-   * Chips de comanda: da mesa escolhida (mais a próxima livre) quando ela
-   * trabalha com comandas; senão as comandas abertas, pra achar pelo número sem
-   * saber a mesa — a validação depois trava a mesa certa.
-   */
-  const chipsComanda = useMemo(() => {
-    const lista: { chave: string; numero: string; label: string; nova?: boolean }[] = []
-    if (ident?.mesa && ident.mesa.modo === 'comandas') {
-      for (const c of ident.mesa.comandas || []) {
-        lista.push({ chave: `c${c.codigo}`, numero: c.numero, label: `${c.numero}${c.cliente_nome ? ` · ${c.cliente_nome}` : ''}` })
-      }
-      if (ident.mesa.proxima_comanda) {
-        lista.push({ chave: 'nova', numero: ident.mesa.proxima_comanda, label: `Nova comanda ${ident.mesa.proxima_comanda}`, nova: true })
-      }
-      return lista
-    }
-    if (!mesa.trim()) {
-      for (const c of comandasAbertas) {
-        lista.push({
-          chave: `a${c.codigo}`,
-          numero: c.numero,
-          label: `${c.numero}${c.cliente_nome ? ` · ${c.cliente_nome}` : ''}${c.mesa_numero != null ? ` · mesa ${c.mesa_numero}` : ''}`,
-        })
-      }
-    }
-    return lista
-  }, [ident, mesa, comandasAbertas])
+  const comandasSemMesa = useMemo(
+    () => comandasAbertas.filter((c) => c.mesa_numero == null),
+    [comandasAbertas]
+  )
 
   const rotulo = useMemo(() => {
     const partes: string[] = []
@@ -202,10 +209,36 @@ export default function Identificacao({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nome, fone, cpf, mesa, comanda, ident, erro, validando, rotulo])
 
-  const chip = (on: boolean, tracejado?: boolean) =>
-    `min-h-[44px] rounded-full border px-3 text-xs font-semibold transition ${
-      on ? 'border-transparent text-white' : tracejado ? 'border-dashed border-primary-300 bg-white text-primary-700' : 'border-slate-200 bg-white text-slate-600'
-    }`
+  // ── Seleção pela lista (tudo passa pela mesma validação) ─────────────────
+  function escolherMesa(numero: number) {
+    setMesa(String(numero))
+    setComanda('')
+  }
+  function escolherComanda(numeroMesa: number | null, numeroComanda: string) {
+    setMesa(numeroMesa != null ? String(numeroMesa) : '')
+    setComanda(numeroComanda)
+  }
+  function paraLevar() {
+    setMesa('')
+    setComanda('')
+  }
+
+  const semNada = !mesa.trim() && !comanda.trim()
+  const chipBase = 'inline-flex min-h-[44px] items-center gap-1 rounded-full border px-3 text-xs font-semibold transition'
+
+  function chipComanda(chave: string, numeroMesa: number | null, c: { numero: string; cliente_nome: string | null }) {
+    const on = comanda.trim() === c.numero && (numeroMesa == null ? !mesa.trim() : mesa === String(numeroMesa))
+    return (
+      <button
+        key={chave}
+        onClick={() => escolherComanda(numeroMesa, c.numero)}
+        className={`${chipBase} ${on ? 'border-transparent text-white' : 'border-slate-200 bg-white text-slate-700'}`}
+        style={on ? { backgroundColor: cor, borderColor: cor } : undefined}
+      >
+        Comanda {c.numero}{c.cliente_nome ? ` · ${c.cliente_nome}` : ''}
+      </button>
+    )
+  }
 
   return (
     <>
@@ -273,8 +306,8 @@ export default function Identificacao({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {validando && <Loader2 size={16} className="animate-spin text-slate-300" />}
-            {(mesa.trim() || comanda.trim()) && (
-              <button onClick={() => { setMesa(''); setComanda('') }} className="min-h-[44px] px-1 text-xs font-semibold text-slate-500 underline">
+            {!semNada && (
+              <button onClick={paraLevar} className="min-h-[44px] px-1 text-xs font-semibold text-slate-500 underline">
                 Limpar
               </button>
             )}
@@ -298,6 +331,7 @@ export default function Identificacao({
           </div>
         )}
 
+        {/* Digitar direto continua sendo o caminho mais rápido pra quem sabe o número. */}
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -315,25 +349,7 @@ export default function Identificacao({
               {mesaTravada && <Lock size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />}
             </div>
             {mesaTravada && <p className="mt-1 px-1 text-xs text-slate-400">A comanda {ident?.comanda?.numero} já está nesta mesa.</p>}
-            {!mesaTravada && mesasAbertas.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {mesasAbertas.map((m) => {
-                  const on = mesa === String(m.numero)
-                  return (
-                    <button
-                      key={m.codigo}
-                      onClick={() => { setMesa(String(m.numero)); setComanda('') }}
-                      className={chip(on)}
-                      style={on ? { backgroundColor: cor } : undefined}
-                    >
-                      {rotuloChipMesa(m)}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
           </div>
-
           <div>
             <label className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
               <ClipboardList size={14} /> Comanda
@@ -349,23 +365,93 @@ export default function Identificacao({
               {comandaTravada && <Lock size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />}
             </div>
             {comandaTravada && <p className="mt-1 px-1 text-xs text-slate-400">Esta mesa trabalha sem comanda.</p>}
-            {!comandaTravada && chipsComanda.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {chipsComanda.map((c) => {
-                  const on = comanda.trim() === c.numero
-                  return (
-                    <button
-                      key={c.chave}
-                      onClick={() => setComanda(c.numero)}
-                      className={chip(on, c.nova)}
-                      style={on ? { backgroundColor: cor } : undefined}
-                    >
-                      {c.label}
-                    </button>
-                  )
-                })}
+          </div>
+        </div>
+
+        {/* Abertas agora — uma linha por mesa, comandas à direita. */}
+        <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
+          <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Abertas agora</p>
+            {carregandoLista && <Loader2 size={14} className="animate-spin text-slate-300" />}
+          </div>
+
+          <div className="max-h-[26rem] divide-y divide-slate-100 overflow-y-auto">
+            {!carregandoLista && linhasMesa.length === 0 && comandasSemMesa.length === 0 && (
+              <p className="px-3 py-6 text-center text-sm text-slate-400">
+                Nenhuma mesa ou comanda aberta — digite o número acima para abrir.
+              </p>
+            )}
+
+            {linhasMesa.map((m) => {
+              const mesaSelecionada = mesa === String(m.numero) && !comanda.trim()
+              return (
+                <div key={m.codigo} className="flex flex-col gap-2 p-2 sm:flex-row sm:items-center">
+                  <button
+                    onClick={() => escolherMesa(m.numero)}
+                    className={`min-h-[44px] shrink-0 rounded-lg border px-2.5 text-left transition ${
+                      mesaSelecionada ? 'border-transparent text-white' : 'border-transparent bg-white hover:bg-slate-50'
+                    }`}
+                    style={mesaSelecionada ? { backgroundColor: cor, borderColor: cor } : undefined}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className={`text-base font-extrabold tracking-tight ${mesaSelecionada ? 'text-white' : 'text-slate-900'}`}>
+                        MESA {m.numero}
+                      </span>
+                      {m.comandas.length > 0 && (
+                        <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${mesaSelecionada ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                          {m.comandas.length} {m.comandas.length === 1 ? 'comanda' : 'comandas'}
+                        </span>
+                      )}
+                    </span>
+                    {m.nome && (
+                      <span className={`block text-xs ${mesaSelecionada ? 'text-white/80' : 'text-slate-500'}`}>{m.nome}</span>
+                    )}
+                  </button>
+
+                  {(m.comandas.length > 0 || m.proxima) && (
+                    <div className="flex flex-wrap gap-1.5 sm:ml-auto sm:justify-end">
+                      {m.comandas.map((c) => chipComanda(`m${m.codigo}c${c.codigo}`, m.numero, c))}
+                      {m.proxima && (() => {
+                        const on = mesa === String(m.numero) && comanda.trim() === m.proxima
+                        return (
+                          <button
+                            onClick={() => escolherComanda(m.numero, m.proxima!)}
+                            className={`${chipBase} ${on ? 'border-transparent text-white' : 'border-dashed border-primary-300 bg-white text-primary-700'}`}
+                            style={on ? { backgroundColor: cor, borderColor: cor } : undefined}
+                          >
+                            <Plus size={14} /> Nova comanda {m.proxima}
+                          </button>
+                        )
+                      })()}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {comandasSemMesa.length > 0 && (
+              <div className="flex flex-col gap-2 p-2 sm:flex-row sm:items-center">
+                <div className="flex min-h-[44px] shrink-0 items-center px-2.5">
+                  <span className="text-sm font-bold text-slate-500">Sem mesa</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 sm:ml-auto sm:justify-end">
+                  {comandasSemMesa.map((c) => chipComanda(`s${c.codigo}`, null, { numero: c.numero, cliente_nome: c.cliente_nome }))}
+                </div>
               </div>
             )}
+
+            <button
+              onClick={paraLevar}
+              className={`min-h-[48px] w-full px-3 text-left text-sm font-semibold transition ${
+                semNada ? 'text-white' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+              style={semNada ? { backgroundColor: cor } : undefined}
+            >
+              <span className="inline-flex items-center gap-2">
+                <ShoppingBag size={16} className={semNada ? 'text-white/80' : 'text-slate-400'} />
+                Pra levar (sem mesa e sem comanda)
+              </span>
+            </button>
           </div>
         </div>
       </section>

@@ -26,7 +26,8 @@ export type ComandaAberta = { codigo: number; numero: string; mesa_numero: numbe
 export type MesaAberta = {
   codigo: number; numero: number; nome: string | null
   modo?: 'conta' | 'comandas' | 'vazia'
-  comandas?: { codigo: number }[]
+  /** `GET /mesas` devolve a comanda inteira; a lista usa número e cliente. */
+  comandas?: { codigo: number; numero?: string; cliente_nome?: string | null }[]
 }
 
 // ── Identificação (contrato §10) ──────────────────────────────────────────
