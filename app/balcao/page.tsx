@@ -2,17 +2,21 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ClipboardList, ListOrdered, GitMerge, Repeat, LogOut, UserRound, Store } from 'lucide-react'
+import { ClipboardList, Armchair, ListOrdered, Repeat, LogOut, UserRound, Store } from 'lucide-react'
 import { apiGet, apiPost } from '@/lib/client-api'
-import { clearTargetComanda } from '@/lib/target-comanda'
-import { clearCart } from '@/lib/cart'
 
-export default function MenuPage() {
+/**
+ * Menu do MODO DELIVERY COM BALCÃO — mesmo desenho e vocabulário do menu
+ * tradicional (`/garcom`), pra quem troca de modo não precisar reaprender nada.
+ */
+export default function MenuBalcaoPage() {
   const router = useRouter()
-  const [nome, setNome] = useState<string>('')
-  const [empresa, setEmpresa] = useState<string>('')
+  const [nome, setNome] = useState('')
+  const [empresa, setEmpresa] = useState('')
 
   useEffect(() => {
+    // /balcao não passa pela trava de vendedor do middleware (que cobre /garcom),
+    // então a checagem é aqui.
     apiGet('/api/garcom/vendedor/me')
       .then((j) => setNome(j.vendedor?.nome || ''))
       .catch(() => router.replace('/garcom/login'))
@@ -29,19 +33,11 @@ export default function MenuPage() {
     }
   }
 
-  // "Anotar pedido" SEMPRE começa do zero: solta a comanda-alvo e limpa o
-  // carrinho livre. (Os carrinhos por comanda ficam guardados nas suas chaves.)
-  function anotarPedido() {
-    clearTargetComanda()
-    clearCart()
-    router.push('/garcom/categorias')
-  }
-
   const cards = [
-    { onClick: anotarPedido, label: 'Anotar pedido', desc: 'Cardápio e novo pedido', icon: ClipboardList, color: 'bg-primary-600' },
-    { onClick: () => router.push('/garcom/comandas'), label: 'Comandas abertas', desc: 'Ver, editar e lançar em comandas', icon: ListOrdered, color: 'bg-emerald-600' },
-    { onClick: () => router.push('/garcom/unir'), label: 'Unir comandas', desc: 'Juntar / desfazer', icon: GitMerge, color: 'bg-amber-600' },
-    { onClick: () => router.push('/garcom/modo'), label: 'Trocar modo', desc: 'Ir pro modo delivery com balcão', icon: Repeat, color: 'bg-stone-900' },
+    { onClick: () => router.push('/balcao/pedir'), label: 'Anotar pedido', desc: 'Cardápio com fotos e complementos', icon: ClipboardList, color: 'bg-primary-600' },
+    { onClick: () => router.push('/balcao/mesas'), label: 'Mesas e comandas', desc: 'O que está aberto no salão', icon: Armchair, color: 'bg-emerald-600' },
+    { onClick: () => router.push('/balcao/pedidos'), label: 'Meus pedidos', desc: 'Acompanhar o que está na cozinha', icon: ListOrdered, color: 'bg-amber-600' },
+    { onClick: () => router.push('/garcom/modo'), label: 'Trocar modo', desc: 'Voltar pro modo tradicional', icon: Repeat, color: 'bg-stone-900' },
   ]
 
   return (
@@ -50,7 +46,6 @@ export default function MenuPage() {
         <div className="mx-auto w-full max-w-5xl px-5 pb-5 pt-6">
           <div className="flex items-start justify-between">
             <div>
-              {/* Logo na MESMA linha: GUTTY + PEDIDOS */}
               <h1 className="flex items-baseline gap-2">
                 <span className="gutty-shine-dark font-display text-3xl font-extrabold leading-none tracking-tighter">GUTTY</span>
                 <span className="text-xs font-semibold uppercase tracking-[0.3em] text-primary-300">Pedidos</span>
@@ -66,14 +61,16 @@ export default function MenuPage() {
               <LogOut size={20} />
             </button>
           </div>
-          <div className="mt-3 flex items-center gap-2 text-sm text-stone-300">
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-stone-300">
             <UserRound size={16} className="text-primary-400" />
             <span className="font-medium text-white">{nome || '...'}</span>
+            <span className="rounded-full bg-primary-500/20 px-2 py-0.5 text-xs font-semibold text-primary-300">
+              Delivery com balcão
+            </span>
           </div>
         </div>
       </header>
 
-      {/* Celular: lista empilhada. Tablet/totem/PC: três cartões lado a lado. */}
       <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-3 p-4 sm:grid-cols-2 sm:gap-4 sm:p-6 lg:grid-cols-4">
         {cards.map((c) => {
           const Icon = c.icon

@@ -65,14 +65,21 @@ export async function middleware(req: NextRequest) {
   }
 
   // ----- 2ª camada: login de vendedor (GARCOM_VENDEDOR) -----
-  // Páginas /garcom/* (exceto /garcom/login) exigem o vendedor logado.
-  // (As rotas /api/garcom/* validam o vendedor internamente via withGarcom.)
+  // Páginas /garcom/* e /balcao/* (exceto /garcom/login) exigem o vendedor
+  // logado. As duas áreas são o mesmo app com dois modos: /garcom é o
+  // tradicional (grava em pedidos_terminal) e /balcao é o modo delivery com
+  // balcão (fala com a retaguarda). A credencial é a mesma nos dois.
+  //
+  // As rotas /api/garcom/* e /api/balcao/* validam o vendedor internamente
+  // via withGarcom, que responde 401 JSON em vez de redirecionar.
   const isVendedorLoginArea =
     pathname === '/garcom/login' ||
     pathname.startsWith('/api/garcom/vendedor/login') ||
     pathname.startsWith('/api/garcom/vendedor/logout')
 
-  if (pathname.startsWith('/garcom') && !pathname.startsWith('/api') && !isVendedorLoginArea) {
+  const ehAreaDoVendedor = pathname.startsWith('/garcom') || pathname.startsWith('/balcao')
+
+  if (ehAreaDoVendedor && !pathname.startsWith('/api') && !isVendedorLoginArea) {
     const garcomCookie = req.cookies.get(GARCOM_COOKIE_NAME)?.value
     if (!garcomCookie) {
       const url = req.nextUrl.clone()

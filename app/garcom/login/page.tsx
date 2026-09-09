@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { apiPost } from '@/lib/client-api'
+import { lerModo, rotaDoModo } from '@/lib/modo'
 
 type Modo = 'codigo' | 'nome'
 
@@ -27,7 +28,8 @@ export default function LoginVendedorPage() {
     try {
       const json = await apiPost('/api/garcom/vendedor/login', { vendedor, senha })
       toast.success(`Olá, ${json.vendedor.nome}`)
-      router.replace('/garcom')
+      // Primeira entrada escolhe o modo; depois vai direto pro que ficou salvo.
+      router.replace(rotaDoModo(lerModo()))
     } catch (err: any) {
       toast.error(err?.message || 'Vendedor ou senha inválidos')
     } finally {

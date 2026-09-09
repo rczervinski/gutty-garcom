@@ -185,3 +185,57 @@ pm2 reload garcom-web
 | `tenants_not_configured` | `MASTER_DATABASE_URL` errada ou banco master inacessível — `pm2 logs garcom-web` |
 | Cookie não persiste | HTTPS ativo? `FORCE_SECURE_COOKIE=true` só com HTTPS |
 | Build estoura memória | VPS pequena: crie swap — `sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile` |
+
+---
+
+## Modo "delivery com balcão"
+
+Opcional. Sem estas variáveis o app roda só no modo tradicional (`/garcom`,
+gravando em `pedidos_terminal`) e as rotas `/api/balcao/**` respondem
+`503 retaguarda_nao_configurada`.
+
+Neste modo o garçom usa o **cardápio da retaguarda** (categorias, fotos,
+complementos, grades) e o pedido cai no **Kanban do Balcão** de lá, dentro da
+mesa/comanda certa. Este app não replica nenhuma dessas regras: ele é um cliente.
+
+### 1) Pré-requisito na retaguarda
+
+A retaguarda precisa estar publicada e expondo `/api/balcao/garcom/**`
+(login, `me`, cardápio, mesas, comandas, identificação e pedidos). Confira:
+
+```bash
+curl -i https://retaguarda.gutty.app.br/api/balcao/garcom/me
+# esperado: 401 {"success":false,"error":"missing_token"}
+# 404 = a retaguarda ainda não tem essas rotas publicadas
+```
+
+### 2) Variáveis no `.env.local` deste app
+
+```
+RETAGUARDA_URL=https://retaguarda.gutty.app.br
+RETAGUARDA_GARCOM_SECRET=<AUTH_OP_SECRET da retaguarda>
+```
+
+`RETAGUARDA_GARCOM_SECRET` tem que ser **o mesmo segredo** que a retaguarda usa
+pra validar o Bearer do garçom: ela lê `AUTH_OP_SECRET` e cai em
+`AUTH_JWT_SECRET` quando aquele não existe. Para descobrir qual está valendo:
+
+```bash
+grep -E 'AUTH_OP_SECRET|AUTH_JWT_SECRET' /var/www/retaguarda-gutty/.env.local
+```
+
+Se o segredo não bater, toda chamada de `/api/balcao/**` volta `401` da
+retaguarda (o proxy repassa o status).
+
+### 3) Como o token viaja
+
+O navegador do garçom **nunca** vê o Bearer. O fluxo é:
+
+1. garçom loga na empresa (`AUTH_TOKEN`) e no vendedor (`GARCOM_VENDEDOR`);
+2. o front chama `/api/balcao/...` — same-origin, só com cookies;
+3. este servidor assina um JWT de 12h `{tid, cnpj, oid, nome}` (o `oid` é o
+   `vendedores.codigo`) e encaminha pra retaguarda com `Authorization: Bearer`;
+4. a resposta volta com o mesmo status, e caminhos `/upload/...` são reescritos
+   pra URL absoluta da retaguarda (as fotos são servidas por ela).
+
+Depois de mexer nas variáveis: `pm2 restart garcom-gutty --update-env`.
